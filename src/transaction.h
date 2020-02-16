@@ -7,10 +7,11 @@
 #ifndef SWIPP_TRANSACTION_H
 #define SWIPP_TRANSACTION_H
 
-#include "constraints.h"
+//#include "constraints.h"
 #include "core.h"
 #include "disk.h"
 #include "db.h"
+#include "script.h"
 #include "tinyformat.h"
 #include "txdb-leveldb.h"
 #include "uint256.h"

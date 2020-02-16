@@ -10,7 +10,7 @@
 #include <stdlib.h>
 
 FILE* AppendBlockFile(unsigned int& nFileRet);
-bool CheckDiskSpace(uint64_t nAdditionalBytes=0);
+//bool CheckDiskSpace(uint64_t nAdditionalBytes=0);
 FILE* OpenBlockFile(unsigned int nFile, unsigned int nBlockPos, const char* pszMode="rb");
 
 #endif /* SWIPP_DISK_H */

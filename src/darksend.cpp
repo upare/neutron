@@ -533,14 +533,17 @@ void CDarkSendPool::Reset(){
     vecMasternodesUsed.clear();
 }
 
-bool CDarkSendPool::SetCollateralAddress(std::string strAddress){
-   CBitcoinAddress address;
-   if (!address.SetString(strAddress))
-   {
-       LogPrintf("CDarkSendPool::SetCollateralAddress - Invalid DarkSend collateral address\n");
-       return false;
-   }
-   collateralPubKey= GetScriptForDestination(address.Get());
+bool CDarkSendPool::SetCollateralAddress(std::string strAddress)
+{
+    CBitcoinAddress address;
+
+    if (!address.SetString(strAddress))
+    {
+        LogPrintf("CDarkSendPool::SetCollateralAddress - Invalid DarkSend collateral address\n");
+        return false;
+    }
+
+    collateralPubKey= GetScriptForDestination(address.Get());
     return true;
 }
 

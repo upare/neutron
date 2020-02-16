@@ -16,7 +16,7 @@ static const int64_t DEFAULT_MAX_TIP_AGE = 60 * 60 * 2;
 extern int64_t nMaxTipAge;
 class CBlockIndex;
 
-FILE* OpenBlockFile(unsigned int nFile, unsigned int nBlockPos, const char* pszMode="rb");
+//FILE* OpenBlockFile(unsigned int nFile, unsigned int nBlockPos, const char* pszMode="rb");
 FILE* AppendBlockFile(unsigned int& nFileRet);
 
 void DelatchIsInitialBlockDownload();
