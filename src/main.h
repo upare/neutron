@@ -16,6 +16,7 @@
 #include "script.h"
 #include "scrypt.h"
 #include "streams.h"
+#include "transaction.h"
 #include "validation.h"
 #include "util.h"
 #include "utilmoneystr.h"
@@ -66,7 +67,7 @@ static const unsigned int MAX_ORPHAN_TRANSACTIONS = MAX_BLOCK_SIZE/100;
 static const unsigned int MAX_INV_SZ = 50000;
 static const int64_t MIN_TX_FEE =  1000000;
 static const int64_t MIN_RELAY_TX_FEE = MIN_TX_FEE;
-static const int64_t COIN_YEAR_REWARD = 5 * CENT; // 5% per year
+//static const int64_t COIN_YEAR_REWARD = 5 * CENT; // 5% per year
 
 static const string DEVELOPER_ADDRESS_MAINNET_V3 = "9iVqNgAHN4BWR8nEyaV3sMxa3ZPHcKc8NN";
 static const string DEVELOPER_ADDRESS_TESTNET_V3 = "mrNsqXKuw9n52z9bijLDn6DkReqRKnZPVj";
@@ -87,9 +88,17 @@ static const int fHaveUPnP = false;
 #endif
 static const uint256 hashGenesisBlock("0x0000036366895115eba0d9a314a3fc10a3972b82db5413d79e98a4aba1927e46");
 static const uint256 hashGenesisBlockTestNet("0x3c81f5a39588ff6112bf55343ef61b998098a3eca0cabfb6b3dbd908c2c3345a");
+/** Threshold for nLockTime: below this value it is interpreted as block number, otherwise as UNIX timestamp. */
+//static const unsigned int LOCKTIME_THRESHOLD = 500000000; // Tue Nov  5 00:53:20 1985 UTC
 
-inline int64_t PastDrift(int64_t nTime)   { return nTime - 10 * 60; } // up to 10 minutes from the past
-inline int64_t FutureDrift(int64_t nTime) { return nTime + 10 * 60; } // up to 10 minutes from the future
+inline bool IsProtocolV1RetargetingFixed(int nHeight) { return nHeight > 0; }
+inline bool IsProtocolV2(int nHeight) { return nHeight > 0; }
+
+inline int64_t FutureDriftV1(int64_t nTime) { return nTime + 10 * 60; }
+inline int64_t FutureDriftV2(int64_t nTime) { return nTime + 10 * 60; }
+inline int64_t FutureDrift(int64_t nTime, int nHeight) { return IsProtocolV2(nHeight) ? FutureDriftV2(nTime) : FutureDriftV1(nTime); }
+
+inline unsigned int GetTargetSpacing(int nHeight) { return IsProtocolV2(nHeight) ? 240 : 60; }
 
 extern CScript COINBASE_FLAGS;
 extern CCriticalSection cs_main;

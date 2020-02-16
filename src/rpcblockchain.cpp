@@ -88,16 +88,27 @@ double GetPoSKernelPS()
     {
         if (pindex->IsProofOfStake())
         {
-            dStakeKernelsTriedAvg += GetDifficulty(pindex) * 4294967296.0;
-            nStakesTime += pindexPrevStake ? (pindexPrevStake->nTime - pindex->nTime) : 0;
+            if (pindexPrevStake)
+            {
+                dStakeKernelsTriedAvg += GetDifficulty(pindexPrevStake) * 4294967296.0;
+                nStakesTime += pindexPrevStake->nTime - pindex->nTime;
+                nStakesHandled++;
+            }
             pindexPrevStake = pindex;
-            nStakesHandled++;
         }
 
         pindex = pindex->pprev;
     }
 
-    return nStakesTime ? dStakeKernelsTriedAvg / nStakesTime : 0;
+    double result = 0;
+
+    if (nStakesTime)
+        result = dStakeKernelsTriedAvg / nStakesTime;
+
+    if (IsProtocolV2(nBestHeight))
+        result *= STAKE_TIMESTAMP_MASK + 1;
+
+    return result;
 }
 
 UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool fPrintTransactionDetail)
