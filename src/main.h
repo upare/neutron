@@ -65,6 +65,8 @@ static const unsigned int MAX_BLOCK_SIZE_GEN = MAX_BLOCK_SIZE/2;
 static const unsigned int MAX_BLOCK_SIGOPS = MAX_BLOCK_SIZE/50;
 static const unsigned int MAX_ORPHAN_TRANSACTIONS = MAX_BLOCK_SIZE/100;
 static const unsigned int MAX_INV_SZ = 50000;
+/** The maximum number of sigops we're willing to relay/mine in a single tx */
+static const unsigned int MAX_TX_SIGOPS = MAX_BLOCK_SIGOPS / 5;
 static const int64_t MIN_TX_FEE =  1000000;
 static const int64_t MIN_RELAY_TX_FEE = MIN_TX_FEE;
 //static const int64_t COIN_YEAR_REWARD = 5 * CENT; // 5% per year
@@ -190,60 +192,80 @@ enum GetMinFee_mode
     GMF_SEND,
 };
 
-typedef std::map<uint256, std::pair<CTxIndex, CTransaction> > MapPrevTx;
+/** Check for standard transaction types
+    @param[in] mapInputs Map of previous transactions that have outputs we're spending
+    @return True if all inputs (scriptSigs) use only standard transaction forms
+    @see CTransaction::FetchInputs
+*/
+bool AreInputsStandard(const CTransaction& tx, const MapPrevTx& mapInputs);
 
+/** Count ECDSA signature operations the old-fashioned (pre-0.6) way
+    @return number of sigops this transaction's outputs will produce when spent
+    @see CTransaction::FetchInputs
+*/
+unsigned int GetLegacySigOpCount(const CTransaction& tx);
 
-class CTxIndex
+/** Count ECDSA signature operations in pay-to-script-hash inputs.
+
+    @param[in] mapInputs Map of previous transactions that have outputs we're spending
+    @return maximum number of sigops required to validate this transaction's inputs
+    @see CTransaction::FetchInputs
+ */
+unsigned int GetP2SHSigOpCount(const CTransaction& tx, const MapPrevTx& mapInputs);
+
+// A transaction with a merkle branch linking it to the block chain
+class CMerkleTx : public CTransaction
 {
+private:
+    int GetDepthInMainChainINTERNAL(CBlockIndex* &pindexRet) const;
 public:
-    CDiskTxPos pos;
-    std::vector<CDiskTxPos> vSpent;
+    uint256 hashBlock;
+    std::vector<uint256> vMerkleBranch;
+    int nIndex;
 
-    CTxIndex()
+    // Memory only
+    mutable bool fMerkleVerified;
+
+    CMerkleTx()
     {
-        SetNull();
+        Init();
     }
 
-    CTxIndex(const CDiskTxPos& posIn, unsigned int nOutputs)
+    CMerkleTx(const CTransaction& txIn) : CTransaction(txIn)
     {
-        pos = posIn;
-        vSpent.resize(nOutputs);
+        Init();
+    }
+
+    void Init()
+    {
+        hashBlock = 0;
+        nIndex = -1;
+        fMerkleVerified = false;
     }
 
     IMPLEMENT_SERIALIZE
     (
-        if (!(nType & SER_GETHASH))
-            READWRITE(nVersion);
-        READWRITE(pos);
-        READWRITE(vSpent);
+        nSerSize += SerReadWrite(s, *(CTransaction*)this, nType, nVersion, ser_action);
+        nVersion = this->nVersion;
+        READWRITE(hashBlock);
+        READWRITE(vMerkleBranch);
+        READWRITE(nIndex);
     )
 
-    void SetNull()
-    {
-        pos.SetNull();
-        vSpent.clear();
-    }
+    int SetMerkleBranch(const CBlock* pblock=NULL);
 
-    bool IsNull()
-    {
-        return pos.IsNull();
-    }
-
-    friend bool operator==(const CTxIndex& a, const CTxIndex& b)
-    {
-        return (a.pos    == b.pos &&
-                a.vSpent == b.vSpent);
-    }
-
-    friend bool operator!=(const CTxIndex& a, const CTxIndex& b)
-    {
-        return !(a == b);
-    }
-    int GetDepthInMainChain() const;
-
+    // Return depth of transaction in blockchain:
+    // -1  : not in blockchain, and not in memory pool (conflicted transaction)
+    //  0  : in memory pool, waiting to be included in a block
+    // >=1 : this many blocks deep in the main chain
+    int GetDepthInMainChain(CBlockIndex* &pindexRet) const;
+    int GetDepthInMainChain() const { CBlockIndex *pindexRet; return GetDepthInMainChain(pindexRet); }
+    bool IsInMainChain() const { CBlockIndex *pindexRet; return GetDepthInMainChainINTERNAL(pindexRet) > 0; }
+    int GetBlocksToMaturity() const;
+    bool AcceptToMemoryPool(bool fLimitFree=true);
+    int GetTransactionLockSignatures() const;
+    bool IsTransactionLockTimedOut() const;
 };
-
-
 
 /** Nodes collect new transactions into a block, hash them into a hash tree,
  * and scan through nonce values to make the block's hash satisfy proof-of-work
@@ -491,7 +513,26 @@ public:
         return true;
     }
 
-
+    void print() const
+    {
+        LogPrintf("CBlock(hash=%s, ver=%d, hashPrevBlock=%s, hashMerkleRoot=%s, nTime=%u, nBits=%08x, nNonce=%u, vtx=%lu, vchBlockSig=%s)\n",
+            GetHash().ToString().c_str(),
+            nVersion,
+            hashPrevBlock.ToString().c_str(),
+            hashMerkleRoot.ToString().c_str(),
+            nTime, nBits, nNonce,
+            vtx.size(),
+            HexStr(vchBlockSig.begin(), vchBlockSig.end()).c_str());
+        for (unsigned int i = 0; i < vtx.size(); i++)
+        {
+            LogPrintf("  ");
+            vtx[i].print();
+        }
+        LogPrintf("  vMerkleTree: ");
+        for (unsigned int i = 0; i < vMerkleTree.size(); i++)
+            LogPrintf("%s ", vMerkleTree[i].ToString().substr(0,10).c_str());
+        LogPrintf("\n");
+    }
 
     std::string ToString() const
     {
@@ -525,6 +566,7 @@ public:
     bool SignBlock(CWallet& keystore, int64_t nFees);
     bool SignBlock_POW(const CKeyStore& keystore);
     bool CheckBlockSignature() const;
+    void RebuildAddressIndex(CTxDB& txdb);
 
 private:
     bool SetBestChainInner(CTxDB& txdb, CBlockIndex *pindexNew);
@@ -676,7 +718,10 @@ public:
 
     int64_t GetPastTimeLimit() const
     {
-        return GetMedianTimePast();
+        if (IsProtocolV2(nHeight))
+            return GetBlockTime() - 120;
+        else
+            return GetMedianTimePast();
     }
 
     enum { nMedianTimeSpan=11 };

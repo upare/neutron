@@ -80,22 +80,41 @@ public:
 
 
 
+    // Get the KeyID of this public key (hash of its serialization)
     CKeyID GetID() const {
         return CKeyID(Hash160(vchPubKey));
     }
 
+    // Get the 256-bit hash of this public key.
     uint256 GetHash() const {
         return Hash(vchPubKey.begin(), vchPubKey.end());
     }
 
+    // Check syntactic correctness.
+    //
+    // Note that this is consensus critical as CheckSig() calls it!
     bool IsValid() const {
         return vchPubKey.size() == 33 || vchPubKey.size() == 65;
     }
 
+    // fully validate whether this is a valid public key (more expensive than IsValid())
     bool IsCompressed() const {
         return vchPubKey.size() == 33;
     }
 
+    // Verify a DER signature (~72 bytes).
+    // If this public key is not fully valid, the return value will be false.
+    bool Verify(const uint256 &hash, const std::vector<unsigned char>& vchSig) const;
+
+    // Verify a compact signature (~65 bytes).
+    // See CKey::SignCompact.
+    bool VerifyCompact(const uint256 &hash, const std::vector<unsigned char>& vchSig) const;
+
+    // Recover a public key from a compact signature.
+    bool RecoverCompact(const uint256 &hash, const std::vector<unsigned char>& vchSig);
+
+    // Turn this public key into an uncompressed public key.
+    bool Decompress();
     std::vector<unsigned char> Raw() const {
         return vchPubKey;
     }
@@ -144,7 +163,7 @@ public:
 
     bool Sign(uint256 hash, std::vector<unsigned char>& vchSig);
 
-    // create a compact signature (65 bytes), which allows reconstructing the used public key
+    // Create a compact signature (65 bytes), which allows reconstructing the used public key.
     // The format is one header byte, followed by two times 32 bytes for the serialized r and s values.
     // The header byte: 0x1B = first key with even y, 0x1C = first key with odd y,
     //                  0x1D = second key with even y, 0x1E = second key with odd y
@@ -156,7 +175,10 @@ public:
     // (the signature is a valid signature of the given data for that key)
     bool SetCompactSignature(uint256 hash, const std::vector<unsigned char>& vchSig);
 
-    bool Verify(uint256 hash, const std::vector<unsigned char>& vchSig);
+    // Verify a DER signature (~72 bytes).
+// If this public key is not fully valid, the return value will be false.
+
+    bool Verify(const uint256 &hash, const std::vector<unsigned char>& vchSig) const;
 
     bool IsValid();
 

@@ -180,6 +180,11 @@ public:
         return str;
     }
 
+    void print() const
+    {
+        LogPrintf("%s", ToString().c_str());
+    }
+
     int64_t GetValueIn(const MapPrevTx& mapInputs) const;
     int64_t GetValueOut() const;
 

@@ -406,6 +406,21 @@ bool CKey::SignCompact(uint256 hash, std::vector<unsigned char>& vchSig)
     return fOk;
 }
 
+bool CPubKey::Verify(const uint256 &hash, const std::vector<unsigned char>& vchSig) const {
+    if (!IsValid())
+        return false;
+/*#ifdef USE_SECP256K1
+    if (secp256k1_ecdsa_verify(hash.begin(), 32, &vchSig[0], vchSig.size(), begin(), size()) != 1)
+        return false;
+#else*/
+    CKey key;
+    if (!key.SetPubKey(*this))
+        return false;
+    if (!key.Verify(hash, vchSig))
+        return false;
+//#endif
+    return true;
+}
 // reconstruct public key from a compact signature
 // This is only slightly more CPU intensive than just verifying it.
 // If this function succeeds, the recovered public key is guaranteed to be valid
@@ -438,10 +453,10 @@ bool CKey::SetCompactSignature(uint256 hash, const std::vector<unsigned char>& v
     return false;
 }
 
-bool CKey::Verify(uint256 hash, const std::vector<unsigned char>& vchSig)
+bool Verify(const uint256 hash, const std::vector<unsigned char>& vchSig)
 {
     // -1 = error, 0 = bad sig, 1 = good
-    if (ECDSA_verify(0, (unsigned char*)&hash, sizeof(hash), &vchSig[0], vchSig.size(), pkey) != 1)
+    if (ECDSA_verify(0, (unsigned char*)&hash, sizeof(hash), &vchSig[0], vchSig.size(), !EC_KEY_check_key) != 1)
         return false;
 
     return true;

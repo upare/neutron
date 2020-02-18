@@ -944,7 +944,6 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                 CBlock block;
                 block.ReadFromDisk(pindex);
                 block.BuildMerkleTree();
-                block.print();
                 LogPrintf("\n");
                 nFound++;
             }

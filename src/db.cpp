@@ -4,12 +4,12 @@
 //
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
-
+#include "txdb.h"
 #include "db.h"
 #include "net.h"
 #include "util.h"
 #include "utiltime.h"
-#include "main.h"
+//#include "main.h"
 #include "ui_interface.h"
 
 #include <boost/filesystem.hpp>

@@ -8,6 +8,7 @@
 
 #include "main.h"
 #include "streams.h"
+#include "db.h"
 
 #include <map>
 #include <string>
